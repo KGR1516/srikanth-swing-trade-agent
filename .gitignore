@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.DS_Store
+
+# downloaded / intermediate data (re-created each run)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# data/output/ IS tracked — the workflow commits the daily reports there
