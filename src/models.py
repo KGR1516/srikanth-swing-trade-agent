@@ -144,6 +144,7 @@ class RunResult:
     sectors: Any                      # pandas DataFrame
     quality: list[QualityReport]
     data_sources: list[str] = field(default_factory=list)
+    universe_name: str = ""
     session: str = "eod"                          # morning | afternoon | eod
     session_label: str = ""
     disclaimer: str = (

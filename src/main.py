@@ -8,7 +8,7 @@ import typer
 from dotenv import load_dotenv
 
 from src.agent.orchestrator import DataUnavailableError, run_scan
-from src.config import load_config
+from src.config import ROOT, load_config
 
 app = typer.Typer(add_completion=False, help="NSE swing-trade research agent (no broker orders).")
 
@@ -63,6 +63,37 @@ def scan(
                    f"SL {s.stop:>10,.2f}  T1 {s.target1:>10,.2f}  T2 {s.target2:>10,.2f}  qty {s.quantity}")
         if s.today_status:
             typer.echo(f"       today: {s.today_status}")
+
+
+@app.command()
+def prefetch(
+    universe: Optional[str] = typer.Option(None, help="Same choices as `scan --universe`."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Download full price history into today's cache — run BEFORE the scheduled start time.
+
+    The scan that follows reads this cache and only fetches the latest candles, so the
+    report is ready within a minute or two of 10:30 / 14:45 even for the full NSE list.
+    """
+    import time
+
+    from src.data.market_data import load_prices
+    from src.data.nse import resolve_universe
+
+    load_dotenv()
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
+                        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+    cfg = load_config()
+    if universe:
+        cfg.universe["source"] = universe
+    D = cfg.settings["data"]
+    t0 = time.perf_counter()
+    uni, label = resolve_universe(cfg.universe, ROOT)
+    prices, bench, _ = load_prices(list(uni), D["benchmark"], D["lookback_days"], cfg.path("raw"),
+                                   D["exchange_suffix"], D.get("download_batch_size", 50), D.get("download_retries", 2))
+    typer.echo(f"Prefetched {len(prices)}/{len(uni)} stocks ({label}) + benchmark "
+               f"{'OK' if not bench.empty else 'MISSING'} in {time.perf_counter() - t0:.0f}s")
 
 
 if __name__ == "__main__":
