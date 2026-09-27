@@ -13,15 +13,30 @@ import pandas as pd
 from src.models import QualityReport
 
 
+def drop_holiday_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove placeholder bars Yahoo inserts for NSE holidays (no range, no volume).
+
+    Left in, a flat zero-volume bar shrinks ATR (tighter stops than the stock deserves) and
+    drags the volume average down (breakout volume looks bigger than it is).
+    Index data (volume always 0) is judged on the flat range alone.
+    """
+    if df is None or df.empty:
+        return df
+    flat = (df["High"] == df["Low"]) & (df["Close"] == df["Close"].shift(1))
+    if "Volume" in df and (df["Volume"] > 0).any():
+        flat &= df["Volume"].fillna(0) == 0
+    return df[~flat]
+
+
 def clean_history(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop duplicate dates, rows without a close, and sort."""
+    """Drop duplicate dates, rows without a close, holiday placeholder bars, and sort."""
     out = df[~df.index.duplicated(keep="last")].sort_index()
     out = out.dropna(subset=["Close"])
     out[["Open", "High", "Low"]] = out[["Open", "High", "Low"]].fillna(
         pd.DataFrame({c: out["Close"] for c in ["Open", "High", "Low"]})
     )
     out["Volume"] = out["Volume"].fillna(0)
-    return out
+    return drop_holiday_rows(out)
 
 
 def validate_history(
