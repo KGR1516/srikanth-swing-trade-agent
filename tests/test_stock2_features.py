@@ -132,3 +132,26 @@ def test_pipeline_runs_without_pandas_ta(cfg, tmp_path, monkeypatch):
     assert res.setups and all(s.confluence_score is None for s in res.setups)
     assert "confluence_pts" not in res.setups[0].score_breakdown
     assert not any("confluence" in src for src in res.data_sources)
+
+
+def test_email_login_strips_spaces_from_app_password(cfg, tmp_path, monkeypatch):
+    """Google shows app passwords as 'abcd efgh ijkl mnop' — SMTP needs them without spaces."""
+    from src.agent import report_agent
+    from tests.test_pipeline import _run
+    res = _run(cfg, tmp_path)
+    seen = {}
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self): pass
+        def login(self, user, pw): seen.update(user=user, pw=pw)
+        def send_message(self, msg): seen["to"] = msg["To"]
+
+    monkeypatch.setattr(report_agent.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("GMAIL_ADDRESS", " me@gmail.com\n")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "abcd efgh ijkl mnop\n")
+    monkeypatch.delenv("RECIPIENT_EMAIL", raising=False)
+    report_agent.ReportAgent._email(res, tmp_path / "swing_agent.xlsx")
+    assert seen == {"user": "me@gmail.com", "pw": "abcdefghijklmnop", "to": "me@gmail.com"}
