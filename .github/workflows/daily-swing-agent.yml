@@ -1,11 +1,22 @@
-# ① SCHEDULE — runs the full pipeline after NSE close and commits the reports.
+# ① SCHEDULE — two runs every trading day, started at an exact IST time.
+#
+# GitHub's scheduler often starts jobs 5–20 min late, so each cron fires 20 minutes EARLY;
+# the job installs, runs the tests, then waits until the exact target time before scanning.
+#   10:30:00 IST  morning   → setups from yesterday's close + live status of each setup today
+#   14:45:00 IST  afternoon → PROVISIONAL scan on today's candle (volume projected to full day)
 name: Daily Swing Trade Agent
 
 on:
   schedule:
-    - cron: "30 11 * * 1-5"      # 17:00 IST Mon–Fri (NSE closes 15:30; EOD data settled)
+    - cron: "40 4 * * 1-5"       # 10:10 IST → waits → scan starts 10:30:00 IST
+    - cron: "55 8 * * 1-5"       # 14:25 IST → waits → scan starts 14:45:00 IST
   workflow_dispatch:
     inputs:
+      session:
+        description: "Run type"
+        type: choice
+        options: [auto, morning, afternoon, eod]
+        default: auto
       universe:
         description: "Universe override (blank = config): static | nifty50 | nifty100 | nifty200 | nifty500 | full_nse"
         required: false
@@ -21,7 +32,7 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       TZ: Asia/Kolkata
       PYTHONUNBUFFERED: "1"
@@ -39,6 +50,30 @@ jobs:
       - name: Unit tests (offline)
         run: pytest -q
 
+      - name: Wait for the exact IST start time
+        env:
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          INPUT_SESSION: ${{ github.event.inputs.session }}
+        run: |
+          case "$EVENT_SCHEDULE" in
+            "40 4 * * 1-5") TARGET="10:30"; SESSION="morning" ;;
+            "55 8 * * 1-5") TARGET="14:45"; SESSION="afternoon" ;;
+            *)              TARGET="";      SESSION="${INPUT_SESSION:-auto}" ;;
+          esac
+          case "$SESSION" in auto|morning|afternoon|eod) ;; *) echo "Invalid session: $SESSION"; exit 1 ;; esac
+          echo "SESSION=$SESSION" >> "$GITHUB_ENV"
+          if [ -n "$TARGET" ]; then
+            now=$(date +%s)
+            tgt=$(TZ=Asia/Kolkata date -d "today $TARGET" +%s)
+            if [ "$tgt" -gt "$now" ]; then
+              echo "Waiting $((tgt - now))s → scan starts at $TARGET:00 IST"
+              sleep $((tgt - now))
+            else
+              echo "::warning::GitHub started this job $(( (now - tgt) / 60 )) min after $TARGET IST — running immediately"
+            fi
+          fi
+          echo "Scan starting $(TZ=Asia/Kolkata date '+%H:%M:%S') IST (session: $SESSION)"
+
       - name: Run agent
         env:
           UNIVERSE: ${{ github.event.inputs.universe }}
@@ -48,9 +83,9 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
         run: |
-          ARGS=""
+          ARGS="--session $SESSION"
           case "$UNIVERSE" in
-            static|nifty50|nifty100|nifty200|nifty500|full_nse) ARGS="--universe $UNIVERSE" ;;
+            static|nifty50|nifty100|nifty200|nifty500|full_nse) ARGS="$ARGS --universe $UNIVERSE" ;;
             "") ;;
             *) echo "Invalid universe: $UNIVERSE"; exit 1 ;;
           esac
@@ -60,7 +95,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: swing-report-${{ github.run_number }}
+          name: swing-report-${{ github.run_number }}-${{ env.SESSION }}
           path: data/output/swing_agent.*
           retention-days: 30
 
@@ -71,6 +106,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/output
           git diff --cached --quiet && { echo "No changes"; exit 0; }
-          git commit -m "report: swing setups $(date +%F)"
+          git commit -m "report: $SESSION run $(date '+%F %H:%M') IST"
           git pull --rebase --autostash
           git push
