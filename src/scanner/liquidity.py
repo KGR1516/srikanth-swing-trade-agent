@@ -21,3 +21,19 @@ def scan_liquidity(df: pd.DataFrame, cfg: dict) -> ScanResult:
     passed = all(e.passed for e in ev)
     score = min(100.0, avg_val / c["min_avg_traded_value_cr"] * 50) if c["min_avg_traded_value_cr"] else 100.0
     return ScanResult("liquidity", passed, round(score, 1), ev, {"avg_traded_value_cr": round(avg_val, 2)})
+
+
+def quick_liquid(df: pd.DataFrame, cfg: dict, buffer: float = 0.5) -> bool:
+    """Cheap pre-filter on raw OHLCV, run BEFORE indicators.
+
+    Keeps anything within `buffer` of the real thresholds, so borderline stocks still get the
+    full liquidity check later; clearly illiquid names (most of the full-NSE list) skip the
+    expensive indicator work entirely.
+    """
+    c = cfg["scanner"]["liquidity"]
+    tail = df.tail(20)
+    if tail.empty:
+        return False
+    price = float(tail["Close"].iloc[-1])
+    avg_val_cr = float((tail["Close"] * tail["Volume"]).mean()) / 1e7
+    return price >= c["min_price"] * (1 - buffer) and avg_val_cr >= c["min_avg_traded_value_cr"] * buffer
