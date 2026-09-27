@@ -10,12 +10,13 @@ A transparent NSE swing-trading **research** agent. Every weekday after market c
 ① SCHEDULE        GitHub Actions, 17:00 IST Mon–Fri
 ② MARKET DATA     Yahoo Finance adjusted OHLCV  +  NSE bhavcopy close cross-check
 ③ DATA QUALITY    history length · staleness · OHLC sanity · unadjusted splits · zero volume · NSE mismatch
-④ FULL SCANNER    Technical (liquidity, breakout, pre-breakout, pullback, momentum, RS)
-                  Fundamental (ROE, D/E, growth, margin, P/E)  ·  Sector strength
+④ FULL SCANNER    Technical (liquidity, breakout + grade, pre-breakout, pullback, momentum, RS 3M+1M)
+                  Confluence (≈370 pandas-ta-classic indicator columns → one bullish %)
+                  Fundamental (ROE, D/E, growth, margin, P/E, loss-making)  ·  Sector strength
 ⑤ EVENT CHECK     results-date blackout · ex-dividend warning
 ⑥ RISK ENGINE     market regime → risk multiplier · volatility limits · risk budget
 ⑦ SETUP ENGINE    entry trigger · stop · T1/T2 · R:R · qty · portfolio & sector caps
-⑧ FINAL REPORT    swing_agent.xlsx · swing_agent.json · swing_agent.md (+ optional Telegram)
+⑧ FINAL REPORT    swing_agent.xlsx · swing_agent.json · swing_agent.md (+ optional Email / Telegram)
 ```
 
 ## Project layout
@@ -51,7 +52,11 @@ pip install -r requirements.txt
 pytest -q                          # offline test-suite
 python -m src.main scan            # full run
 python -m src.main scan --universe nifty200 --capital 1000000 -v
+python -m src.main scan --symbols RELIANCE,TCS,IRCTC     # quick check of a few names
+python -m src.main scan --no-confluence                  # faster run, skips the indicator catalogue
 ```
+
+To scan your own list, put one symbol per line in `data/input/watchlist.txt`. If the file has any symbols, they replace the configured universe.
 
 ## How a setup is built
 
@@ -59,9 +64,12 @@ python -m src.main scan --universe nifty200 --capital 1000000 -v
 |---|---|
 | Liquidity | price ≥ ₹50, 20D avg volume ≥ 2.5 L, avg traded value ≥ ₹10 Cr |
 | Setup type | **Breakout**: close > prior 20D high, volume ≥ 1.5× avg, ≤ 5% extended, strong close, close > EMA50 > EMA200 · **Pre-Breakout**: ≤ 3% below 20D high, base ≤ 12% deep, volume drying up · **Pullback**: uptrend, within 2% of EMA20, RSI 40–55, bounce |
-| Technical score | 50% setup quality + 50% momentum template (EMA stack, EMA200 rising, RSI, ADX, MACD, % of 52W high) |
-| Relative strength | 63-day excess return vs Nifty, ranked as a percentile; < 65 is rejected |
-| Final score | 40% technical · 20% RS · 20% fundamental · 10% sector · 10% event, and must be ≥ 60 |
+| Technical score | 50% setup quality + 50% momentum template (EMA stack, EMA200 rising, RSI, ADX, MACD, % of 52W high, Supertrend, OBV); +5 for a Strong Fresh breakout, +3 for Fresh |
+| Breakout grade | **Strong Fresh** ≤1% above level, vol ≥5×, RSI <70 · **Fresh** ≤2%, vol ≥5× · **Solid** ≤3%, vol ≥3×, RSI <75 · **Extended** >5% or RSI ≥75 (sent to the watchlist) · **Unconfirmed** above the level but on light volume |
+| Relative strength | percentile = 70% × 63-day rank + 30% × 20-day rank vs Nifty; < 65 is rejected |
+| Confluence | share of ~370 indicator readings that are bullish, pooled by category (trend, momentum, moving averages, volume, candles) |
+| Final score | 34% technical · 17% RS · 17% fundamental · 15% confluence · 8.5% sector · 8.5% event, then penalties (loss-making −8, failed breakout −15); must be ≥ 60 |
+| Verdict | BUY NOW ≥ 80 · BUY ≥ 65 · WATCH ≥ 50 · AVOID ≥ 35 · SKIP. A stock that passes every gate is at least BUY; a rejected stock is never shown as BUY |
 | Entry trigger | buy-stop above the day's high (Breakout/Pullback) or the 20D high (Pre-Breakout) + 0.1 × ATR |
 | Stop loss | tighter of swing-low (10 bars) and 1.5 × ATR; at least 1.5% and 1 × ATR; rejected if > 8% |
 | Targets | T1 = 2R, T2 = 3R; flags if the 52W high sits inside T1 |
@@ -74,7 +82,16 @@ python -m src.main scan --universe nifty200 --capital 1000000 -v
 
 ## Reports (`data/output/`)
 
-- **swing_agent.xlsx** has seven sheets: Summary, Next Session Setups, Watchlist (near-misses with the reason each was rejected), Full Scan, Sectors, Evidence (every rule check, pass or fail) and Data Quality.
+- **swing_agent.xlsx** has nine sheets:
+  - Summary
+  - Next Session Setups (with a colour-coded verdict and breakout grade)
+  - Watchlist (near-misses with the reason each was rejected)
+  - Score Breakdown (points from each component, penalties, and confluence by category)
+  - Pre-Market Checklist (tick-boxes per setup)
+  - Full Scan (every stock, including Supertrend, Bollinger %B, Stochastic, VWAP distance and follow-through)
+  - Sectors
+  - Evidence (every rule check, pass or fail)
+  - Data Quality
 - **swing_agent.json** is the same content in machine-readable form.
 - **swing_agent.md** is a quick summary, also shown as the GitHub Actions job summary.
 
@@ -82,8 +99,31 @@ python -m src.main scan --universe nifty200 --capital 1000000 -v
 
 `.github/workflows/daily-swing-agent.yml` runs at 17:00 IST on weekdays. It runs the tests, then the agent, uploads the reports as an artifact and commits them to `data/output/`. You can also run it manually from **Actions → Daily Swing Trade Agent → Run workflow**, with an optional universe override.
 
+- Optional email with the Excel report attached: add the secrets `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` (a Gmail App Password) and `RECIPIENT_EMAIL`. These are the same secrets srikanth-stock-2 uses.
 - Optional Telegram alert: add the repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 - If fewer than 50% of symbols have usable data (provider outage or holiday), the run **aborts with exit code 2**. The job goes red and yesterday's report is left untouched.
+
+## Merged from srikanth-stock-2
+
+| From stock-2 | Where it lives now |
+|---|---|
+| Setup grades (Strong Fresh / Fresh / Solid / Extended / Failed), live status, follow-through | `src/scanner/breakout.py` |
+| 60-day closing-high "major level" | `bo:clears_60d_closing_high` evidence and a risk note |
+| Full pandas-ta-classic confluence voting | `src/analysis/confluence.py` (ported as is), weight 15% |
+| Bollinger %B, Stochastic, OBV, VWAP, Supertrend | `src/analysis/technical.py` (pure pandas, no TA-Lib needed) |
+| 20-day RS vs Nifty | blended into the RS percentile |
+| Action bands BUY NOW → SKIP | `scoring.action_bands` in `settings.yaml` |
+| Loss-making −8 and failed-breakout −15 penalties; P/E caution | `scoring.penalties`, `fundamentals.pe_caution` |
+| Watchlist file and full-NSE universe | `data/input/watchlist.txt`, `source: full_nse` |
+| Gmail report email | `src/agent/report_agent.py` |
+| Score Breakdown and Pre-Market Checklist sheets | `src/reports/excel.py` |
+| `--symbols` CLI option | `src/main.py` |
+
+**Changed on purpose:**
+
+- **Stops and position size:** stock-2 used a fixed 1.5% stop and "5–7% of capital" sizing bands. Here the stop is based on ATR and the swing low, and quantity is sized from risk.
+- **Grade names:** stock-2 labelled a low-volume breakout "Extended". Here it's "Unconfirmed".
+- **One run a day:** stock-2 ran three times a day (pre-market, mid-session, post-close). This agent works on completed daily candles, so it runs once after the close. A manual run during market hours ignores the day's unfinished candle.
 
 ## Data notes
 

@@ -7,3 +7,7 @@ PyYAML>=6.0,<7
 python-dotenv>=1.0,<2
 typer>=0.16,<1
 pytest>=8,<9
+
+# Full-catalogue indicator confluence (from srikanth-stock-2). Pure Python, no TA-Lib needed.
+# If you remove it, the agent skips confluence and renormalises the score weights.
+pandas-ta-classic>=0.8,<1
