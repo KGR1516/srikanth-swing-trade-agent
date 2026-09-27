@@ -107,3 +107,22 @@ def build_setup(
         risks=risks,
     )
     return setup, ""
+
+
+def live_check(setup: Setup, bar: pd.Series | None) -> tuple[str, float | None]:
+    """Morning run: where does yesterday's setup stand in today's session so far?"""
+    if bar is None or bar.isna().any():
+        return "No live data (holiday / feed delay)", None
+    o, h, lo, c = (float(bar[k]) for k in ("Open", "High", "Low", "Close"))
+    rps = setup.risk_per_share or 1.0
+    if o > setup.entry_limit:
+        return f"SKIP — opened {o:,.2f}, above don't-chase {setup.entry_limit:,.2f}", c
+    if h >= setup.entry_trigger:
+        if c <= setup.stop:
+            return "STOPPED OUT — trading at/below stop after triggering", c
+        if lo <= setup.stop:
+            return "TRIGGERED — but stop level also traded today; check your fill", c
+        if h >= setup.target1:
+            return f"T1 HIT ({setup.target1:,.2f}) — book part, trail stop to entry", c
+        return f"TRIGGERED — now {(c - setup.entry_trigger) / rps:+.1f}R", c
+    return f"Not triggered — needs ≥ {setup.entry_trigger:,.2f} (now {c:,.2f})", c
