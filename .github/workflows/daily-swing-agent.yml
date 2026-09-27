@@ -1,15 +1,16 @@
-# ① SCHEDULE — two runs every trading day, started at an exact IST time.
+# ① SCHEDULE — two runs every trading day, scan starts at an exact IST time.
 #
-# GitHub's scheduler often starts jobs 5–20 min late, so each cron fires 20 minutes EARLY;
-# the job installs, runs the tests, then waits until the exact target time before scanning.
+# GitHub's scheduler often starts jobs 5–20 min late, so each cron fires EARLY. The job installs,
+# tests, and PREFETCHES the full price history while it waits; at the exact time it only fetches
+# the latest candles, so the report is out within a minute or two.
 #   10:30:00 IST  morning   → setups from yesterday's close + live status of each setup today
 #   14:45:00 IST  afternoon → PROVISIONAL scan on today's candle (volume projected to full day)
 name: Daily Swing Trade Agent
 
 on:
   schedule:
-    - cron: "40 4 * * 1-5"       # 10:10 IST → waits → scan starts 10:30:00 IST
-    - cron: "55 8 * * 1-5"       # 14:25 IST → waits → scan starts 14:45:00 IST
+    - cron: "40 4 * * 1-5"       # 10:10 IST → prefetch → wait → scan starts 10:30:00 IST
+    - cron: "55 8 * * 1-5"       # 14:25 IST → prefetch → wait → scan starts 14:45:00 IST
   workflow_dispatch:
     inputs:
       session:
@@ -44,16 +45,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Unit tests (offline)
-        run: pytest -q
-
-      - name: Wait for the exact IST start time
+      - name: Resolve run settings
         env:
           EVENT_SCHEDULE: ${{ github.event.schedule }}
           INPUT_SESSION: ${{ github.event.inputs.session }}
+          INPUT_UNIVERSE: ${{ github.event.inputs.universe }}
         run: |
           case "$EVENT_SCHEDULE" in
             "40 4 * * 1-5") TARGET="10:30"; SESSION="morning" ;;
@@ -61,7 +57,26 @@ jobs:
             *)              TARGET="";      SESSION="${INPUT_SESSION:-auto}" ;;
           esac
           case "$SESSION" in auto|morning|afternoon|eod) ;; *) echo "Invalid session: $SESSION"; exit 1 ;; esac
-          echo "SESSION=$SESSION" >> "$GITHUB_ENV"
+          UARG=""
+          case "$INPUT_UNIVERSE" in
+            static|nifty50|nifty100|nifty200|nifty500|full_nse) UARG="--universe $INPUT_UNIVERSE" ;;
+            "") ;;
+            *) echo "Invalid universe: $INPUT_UNIVERSE"; exit 1 ;;
+          esac
+          { echo "SESSION=$SESSION"; echo "TARGET=$TARGET"; echo "UARG=$UARG"; } >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Unit tests (offline)
+        run: pytest -q
+
+      - name: Prefetch price history (before the start time)
+        continue-on-error: true      # if this fails, the scan simply downloads everything itself
+        run: python -m src.main prefetch $UARG
+
+      - name: Wait for the exact IST start time
+        run: |
           if [ -n "$TARGET" ]; then
             now=$(date +%s)
             tgt=$(TZ=Asia/Kolkata date -d "today $TARGET" +%s)
@@ -69,27 +84,19 @@ jobs:
               echo "Waiting $((tgt - now))s → scan starts at $TARGET:00 IST"
               sleep $((tgt - now))
             else
-              echo "::warning::GitHub started this job $(( (now - tgt) / 60 )) min after $TARGET IST — running immediately"
+              echo "::warning::Scan starting $(( (now - tgt) / 60 )) min after $TARGET IST (GitHub started the job late)"
             fi
           fi
           echo "Scan starting $(TZ=Asia/Kolkata date '+%H:%M:%S') IST (session: $SESSION)"
 
       - name: Run agent
         env:
-          UNIVERSE: ${{ github.event.inputs.universe }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-        run: |
-          ARGS="--session $SESSION"
-          case "$UNIVERSE" in
-            static|nifty50|nifty100|nifty200|nifty500|full_nse) ARGS="$ARGS --universe $UNIVERSE" ;;
-            "") ;;
-            *) echo "Invalid universe: $UNIVERSE"; exit 1 ;;
-          esac
-          python -m src.main scan $ARGS
+        run: python -m src.main scan --session $SESSION $UARG
 
       - name: Upload reports
         if: success()
