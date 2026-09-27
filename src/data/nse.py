@@ -24,12 +24,15 @@ HEADERS = {
     "Referer": "https://www.nseindia.com/",
 }
 
-INDEX_CSV = {
-    "nifty50": "https://archives.nseindia.com/content/indices/ind_nifty50list.csv",
-    "nifty100": "https://archives.nseindia.com/content/indices/ind_nifty100list.csv",
-    "nifty200": "https://archives.nseindia.com/content/indices/ind_nifty200list.csv",
-    "nifty500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
+INDEX_CSV = {  # primary + mirror for each index list
+    name: [f"https://archives.nseindia.com/content/indices/ind_{name}list.csv",
+           f"https://nsearchives.nseindia.com/content/indices/ind_{name}list.csv",
+           f"https://www.niftyindices.com/IndexConstituent/ind_{name}list.csv"]
+    for name in ("nifty50", "nifty100", "nifty200", "nifty500")
 }
+UNIVERSE_LABELS = {"static": "Custom list", "watchlist": "Watchlist", "nifty50": "Nifty 50",
+                   "nifty100": "Nifty 100", "nifty200": "Nifty 200", "nifty500": "Nifty 500",
+                   "full_nse": "Full NSE"}
 
 EQUITY_LIST_URLS = [
     "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv",
@@ -83,7 +86,7 @@ def _read_csv(raw: bytes) -> pd.DataFrame:
 
 
 def _index_list(source: str) -> dict[str, str] | None:
-    raw = _get(INDEX_CSV[source])
+    raw = next((r for r in (_get(u) for u in INDEX_CSV[source]) if r), None)
     if raw is None:
         return None
     df = _read_csv(raw)
@@ -106,17 +109,22 @@ def _full_nse(sector_hint: dict[str, str]) -> dict[str, str] | None:
     return None
 
 
-def get_universe(universe_cfg: dict, root: Path | None = None) -> dict[str, str]:
-    """Return {symbol: sector}.
-
-    Priority: watchlist file (if it has symbols) → live NSE list (index or full_nse)
-    → static list in universe.yaml. `symbols` may be a {SYMBOL: sector} map or a list.
-    """
+def static_universe(universe_cfg: dict) -> dict[str, str]:
+    """{symbol: sector} from the symbols listed in universe.yaml (no network)."""
     raw_symbols = universe_cfg.get("symbols") or {}
     if isinstance(raw_symbols, list):
-        static = {str(s).strip().upper(): "Unclassified" for s in raw_symbols if str(s).strip()}
-    else:
-        static = {str(k).strip().upper(): str(v) for k, v in raw_symbols.items()}
+        return {str(s).strip().upper(): "Unclassified" for s in raw_symbols if str(s).strip()}
+    return {str(k).strip().upper(): str(v) for k, v in raw_symbols.items()}
+
+
+def resolve_universe(universe_cfg: dict, root: Path | None = None) -> tuple[dict[str, str], str]:
+    """Return ({symbol: sector}, label actually used).
+
+    Priority: watchlist file (if it has symbols) → live NSE list (index or full_nse)
+    → for full_nse, Nifty 500 → static list in universe.yaml.
+    `symbols` may be a {SYMBOL: sector} map or a list.
+    """
+    static = static_universe(universe_cfg)
 
     wl_path = universe_cfg.get("watchlist_file")
     if wl_path:
@@ -124,27 +132,34 @@ def get_universe(universe_cfg: dict, root: Path | None = None) -> dict[str, str]
         wl = load_watchlist(wl_path)
         if wl:
             log.info("Universe: %d symbols from watchlist %s (overrides config)", len(wl), wl_path)
-            return {s: static.get(s, "Unclassified") for s in wl}
+            return {s: static.get(s, "Unclassified") for s in wl}, "Watchlist"
 
     source = str(universe_cfg.get("source", "static")).lower()
     if source == "static":
-        return static
+        return static, UNIVERSE_LABELS["static"]
 
+    out, label = None, UNIVERSE_LABELS.get(source, source)
     if source == "full_nse":
-        hint = dict(static)
-        hint.update(_index_list("nifty500") or {})
+        n500 = _index_list("nifty500") or {}
+        hint = {**static, **n500}
         out = _full_nse(hint)
+        if not out and n500:
+            log.warning("Full NSE list unavailable — falling back to Nifty 500")
+            out, label = n500, "Nifty 500 (fallback from Full NSE)"
     elif source in INDEX_CSV:
         out = _index_list(source)
     else:
         log.warning("Unknown universe source '%s'; using static list", source)
-        return static
 
     if not out:
         log.warning("NSE %s list unavailable — falling back to static universe (%d symbols)", source, len(static))
-        return static
-    log.info("Universe: %d symbols from NSE %s", len(out), source)
-    return out
+        return static, f"{UNIVERSE_LABELS['static']} (fallback from {UNIVERSE_LABELS.get(source, source)})"
+    log.info("Universe: %d symbols from %s", len(out), label)
+    return out, label
+
+
+def get_universe(universe_cfg: dict, root: Path | None = None) -> dict[str, str]:
+    return resolve_universe(universe_cfg, root)[0]
 
 
 def fetch_bhavcopy(trade_date: date | None = None, max_back_days: int = 5) -> pd.DataFrame | None:

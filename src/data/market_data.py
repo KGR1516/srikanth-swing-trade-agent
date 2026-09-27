@@ -59,15 +59,62 @@ def _split_download(raw: pd.DataFrame, tickers: list[str]) -> dict[str, pd.DataF
     return out
 
 
+def _chunks(items: list[str], n: int):
+    for i in range(0, len(items), n):
+        yield items[i : i + n]
+
+
+def download(
+    tickers: list[str],
+    batch_size: int = 50,
+    retries: int = 2,
+    pause: float = 0.5,
+    **yf_kwargs,
+) -> dict[str, pd.DataFrame]:
+    """Batched yf.download with retries.
+
+    Yahoo throttles large bursts from cloud IPs; a throttled batch comes back empty rather
+    than raising. Missing tickers are retried with smaller batches and a growing pause.
+    """
+    import time
+
+    import yfinance as yf  # lazy: tests run offline
+
+    result: dict[str, pd.DataFrame] = {}
+    pending = list(dict.fromkeys(tickers))
+    for attempt in range(retries + 1):
+        if not pending:
+            break
+        if attempt:
+            wait = 5 * attempt * attempt
+            batch_size = max(10, batch_size // 2)
+            log.info("Retry %d/%d for %d tickers in %ds (batch %d)", attempt, retries, len(pending), wait, batch_size)
+            time.sleep(wait)
+        for batch in _chunks(pending, batch_size):
+            try:
+                raw = yf.download(batch, interval="1d", auto_adjust=True, group_by="ticker",
+                                  threads=True, progress=False, **yf_kwargs)
+            except Exception as exc:
+                log.warning("Download failed for batch starting %s: %s", batch[0], exc)
+                continue
+            result.update(_split_download(raw, batch))
+            if pause:
+                time.sleep(pause)
+        pending = [t for t in pending if t not in result]
+    if pending:
+        log.warning("No data for %d tickers after %d retries: %s", len(pending), retries,
+                    ", ".join(pending[:15]))
+    return result
+
+
 def fetch_ohlcv(
     tickers: list[str],
     lookback_days: int = 420,
     cache_dir: Path | None = None,
     batch_size: int = 50,
-) -> dict[str, pd.DataFrame]:
-    """Return {yahoo_ticker: OHLCV DataFrame}."""
-    import yfinance as yf  # lazy: tests run offline
-
+    retries: int = 2,
+) -> tuple[dict[str, pd.DataFrame], set[str]]:
+    """Return ({yahoo_ticker: OHLCV}, tickers served from today's cache)."""
     result: dict[str, pd.DataFrame] = {}
     pending: list[str] = []
     for t in tickers:
@@ -76,34 +123,47 @@ def fetch_ohlcv(
             result[t] = cached
         else:
             pending.append(t)
+    from_cache = set(result)
 
     if pending:
         start = date.today() - timedelta(days=lookback_days)
         log.info("Downloading %d tickers from Yahoo (cached: %d)", len(pending), len(result))
-        for i in range(0, len(pending), batch_size):
-            batch = pending[i : i + batch_size]
-            try:
-                raw = yf.download(
-                    batch,
-                    start=start.isoformat(),
-                    interval="1d",
-                    auto_adjust=True,
-                    group_by="ticker",
-                    threads=True,
-                    progress=False,
-                )
-            except Exception as exc:
-                log.error("Download failed for batch starting %s: %s", batch[0], exc)
-                continue
-            for t, df in _split_download(raw, batch).items():
-                result[t] = df
-                if cache_dir:
-                    df.to_csv(_cache_file(cache_dir, t))
+        fresh = download(pending, batch_size, retries, start=start.isoformat())
+        for t, df in fresh.items():
+            result[t] = df
+            if cache_dir:
+                df.to_csv(_cache_file(cache_dir, t))
+    return result, from_cache
 
-    missing = [t for t in tickers if t not in result]
-    if missing:
-        log.warning("No data for %d tickers: %s", len(missing), ", ".join(missing[:15]))
-    return result
+
+def merge_recent(base: pd.DataFrame, recent: pd.DataFrame) -> pd.DataFrame:
+    """Replace the tail of a cached history with freshly downloaded recent bars."""
+    if recent is None or recent.empty:
+        return base
+    if base is None or base.empty:
+        return recent
+    return pd.concat([base[base.index < recent.index.min()], recent]).sort_index()
+
+
+def refresh_recent(
+    prices: dict[str, pd.DataFrame],
+    symbols: list[str],
+    days: int = 5,
+    suffix: str = ".NS",
+    batch_size: int = 50,
+    retries: int = 1,
+) -> int:
+    """Re-download only the last `days` bars for `symbols` and merge them in place."""
+    if not symbols:
+        return 0
+    tickers = [to_yahoo(s, suffix) for s in symbols]
+    fresh = download(tickers, batch_size, retries, pause=0.2, period=f"{days}d")
+    n = 0
+    for t, df in fresh.items():
+        sym = from_yahoo(t, suffix)
+        prices[sym] = merge_recent(prices.get(sym), df)
+        n += 1
+    return n
 
 
 def load_prices(
@@ -112,9 +172,11 @@ def load_prices(
     lookback_days: int,
     cache_dir: Path | None = None,
     suffix: str = ".NS",
-) -> tuple[dict[str, pd.DataFrame], pd.DataFrame]:
-    """Return ({NSE symbol: OHLCV}, benchmark OHLCV)."""
+    batch_size: int = 50,
+    retries: int = 2,
+) -> tuple[dict[str, pd.DataFrame], pd.DataFrame, int]:
+    """Return ({NSE symbol: OHLCV}, benchmark OHLCV, number of symbols served from cache)."""
     tickers = [to_yahoo(s, suffix) for s in symbols]
-    data = fetch_ohlcv(tickers + [benchmark], lookback_days, cache_dir)
+    data, cached = fetch_ohlcv(tickers + [benchmark], lookback_days, cache_dir, batch_size, retries)
     bench = data.pop(benchmark, pd.DataFrame(columns=OHLCV))
-    return {from_yahoo(t, suffix): df for t, df in data.items()}, bench
+    return {from_yahoo(t, suffix): df for t, df in data.items()}, bench, len(cached - {benchmark})
