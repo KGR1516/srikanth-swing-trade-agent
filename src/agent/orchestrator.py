@@ -25,11 +25,13 @@ from src.agent.setup_agent import SetupAgent
 from src.agent.technical_agent import TechnicalAgent
 from src.analysis.scoring import gated_action, penalties_for, score_breakdown
 from src.analysis.sector import sector_strength
+from src.analysis.setup import live_check
 from src.analysis.technical import enrich
 from src.config import ROOT, Config, load_config
 from src.data.market_data import load_prices
 from src.data.nse import fetch_bhavcopy, get_universe
-from src.data.quality import clean_history, drop_incomplete_bar, validate_history
+from src.data.quality import (clean_history, drop_incomplete_bar, project_partial_volume, resolve_session,
+                              validate_history)
 from src.models import Candidate, QualityReport, RunResult
 
 log = logging.getLogger("swing_agent")
@@ -49,12 +51,16 @@ def run_scan(
     output_dir: Path | None = None,
     write_reports: bool = True,
     now: datetime | None = None,
+    session: str | None = None,
 ) -> RunResult:
     cfg = cfg or load_config()
     S, R = cfg.settings, cfg.rules
     tz = ZoneInfo(S["project"].get("timezone", "Asia/Kolkata"))
     now = now or datetime.now(tz)
     today = as_of or now.date()
+    aft = S["project"].get("afternoon_from", "13:00").split(":")
+    session = resolve_session(session, now, (int(aft[0]), int(aft[1])))
+    log.info("Run session: %s (%s IST)", session, now.strftime("%H:%M"))
 
     # ── ② MARKET DATA ────────────────────────────────────────────
     universe = get_universe(cfg.universe, ROOT)
@@ -75,16 +81,30 @@ def run_scan(
         sources.append("injected data")
         universe = {s: universe.get(s, "Unclassified") for s in prices}
 
-    if S["data_quality"].get("drop_incomplete_bar", True):
+    partial_bars: dict[str, pd.Series] = {}
+    if session == "afternoon":
+        # provisional: keep today's forming candle, scale its volume up to a full-day estimate
+        projected = 0
+        for sym in list(prices):
+            prices[sym], d = project_partial_volume(prices[sym], now)
+            projected += d
+        if projected:
+            sources.append(f"PROVISIONAL — today's candle as of {now:%H:%M} IST, volume projected to full day "
+                           f"({projected} symbols)")
+    elif S["data_quality"].get("drop_incomplete_bar", True):
         dropped = 0
         for sym in list(prices):
-            prices[sym], d = drop_incomplete_bar(prices[sym], now)
+            df0 = prices[sym]
+            prices[sym], d = drop_incomplete_bar(df0, now)
+            if d:
+                partial_bars[sym] = df0.iloc[-1]
             dropped += d
         if benchmark is not None:
             benchmark, _ = drop_incomplete_bar(benchmark, now)
         if dropped:
-            sources.append(f"intraday run — today's partial candle ignored for {dropped} symbols")
-            log.info("Market still open: using last completed session (%d partial bars dropped)", dropped)
+            sources.append(f"setups from last completed session; today's live candle used only for status "
+                           f"({dropped} symbols)")
+            log.info("Market open: setups from last completed session (%d partial bars set aside)", dropped)
 
     # ── ③ DATA QUALITY ───────────────────────────────────────────
     quality: list[QualityReport] = []
@@ -171,6 +191,9 @@ def run_scan(
     # ── ⑦ SETUP ENGINE ───────────────────────────────────────────
     setups = SetupAgent(S, R).run(shortlist, enriched, envelopes)
     chosen = {s.symbol for s in setups}
+    if session == "morning":
+        for s_ in setups:
+            s_.today_status, s_.today_last = live_check(s_, partial_bars.get(s_.symbol))
     bands = sc.get("action_bands")
     for s_ in setups:
         s_.action = gated_action(s_.final_score, True, bands)
@@ -211,7 +234,14 @@ def run_scan(
         sectors=sectors,
         quality=quality,
         data_sources=sources,
+        session=session,
+        session_label={
+            "morning": f"Morning run {now:%H:%M} IST — setups from the {{as_of}} close, with live status today",
+            "afternoon": f"Afternoon run {now:%H:%M} IST — PROVISIONAL: today's candle is not final until 15:30",
+            "eod": "Post-close run — final, on completed daily candles",
+        }[session],
     )
+    result.session_label = result.session_label.replace("{as_of}", result.as_of)
 
     # ── ⑧ FINAL REPORT ───────────────────────────────────────────
     if write_reports:

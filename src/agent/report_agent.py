@@ -21,13 +21,15 @@ XLSX_MIME = ("application", "vnd.openxmlformats-officedocument.spreadsheetml.she
 def summary_lines(res: RunResult) -> list[str]:
     """Plain-text digest shared by email and Telegram."""
     r = res.regime
-    lines = [f"Swing setups for the session after {res.as_of}",
+    lines = [res.session_label or f"Swing setups for the session after {res.as_of}",
              f"Regime: {r.regime.upper()} (risk ×{r.exposure:g}) · breadth {r.breadth_pct:.0f}%", ""]
     for s in res.setups:
         grade = f" {s.breakout_grade}" if s.breakout_grade else ""
         lines.append(f"{s.rank}. {s.symbol} [{s.action} · {s.setup_type}{grade}] buy ≥ {s.entry_trigger:,.2f} · "
                      f"SL {s.stop:,.2f} ({s.stop_pct:.1f}%) · T1 {s.target1:,.2f} · T2 {s.target2:,.2f} · "
                      f"qty {s.quantity} · score {s.final_score:.0f}")
+        if s.today_status:
+            lines.append(f"     today: {s.today_status}")
     if not res.setups:
         lines.append("No setups passed every gate today.")
     if res.watchlist:
@@ -39,7 +41,9 @@ def summary_lines(res: RunResult) -> list[str]:
 def build_email(res: RunResult, sender: str, recipient: str, attachment: Path | None) -> EmailMessage:
     msg = EmailMessage()
     n = len(res.setups)
-    msg["Subject"] = f"Swing Agent {res.as_of}: {n} setup{'s' if n != 1 else ''} · {res.regime.regime.upper()} market"
+    tag = {"morning": "Morning", "afternoon": "Afternoon · PROVISIONAL", "eod": "Post-close"}.get(res.session, "")
+    msg["Subject"] = (f"Swing Agent [{tag}] {res.as_of}: {n} setup{'s' if n != 1 else ''} · "
+                      f"{res.regime.regime.upper()} market")
     msg["From"], msg["To"] = sender, recipient
     body = "\n".join(summary_lines(res))
     if attachment and attachment.exists():
@@ -47,7 +51,7 @@ def build_email(res: RunResult, sender: str, recipient: str, attachment: Path | 
     msg.set_content(body)
     if attachment and attachment.exists():
         msg.add_attachment(attachment.read_bytes(), maintype=XLSX_MIME[0], subtype=XLSX_MIME[1],
-                           filename=f"swing_agent_{res.as_of}.xlsx")
+                           filename=f"swing_agent_{res.as_of}_{res.session}.xlsx")
     return msg
 
 
@@ -72,8 +76,8 @@ class ReportAgent:
         if self.cfg.get("archive_daily", False):
             arch = self.out_dir / "history" / res.as_of
             arch.mkdir(parents=True, exist_ok=True)
-            for p in written:
-                shutil.copy2(p, arch / p.name)
+            for p in written:  # keep morning / afternoon / eod side by side
+                shutil.copy2(p, arch / f"{p.stem}_{res.session}{p.suffix}")
 
         for p in written:
             log.info("Report written: %s", p)
