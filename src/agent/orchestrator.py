@@ -31,8 +31,8 @@ from src.analysis.technical import enrich
 from src.config import ROOT, Config, load_config
 from src.data.market_data import load_prices, refresh_recent
 from src.data.nse import fetch_bhavcopy, resolve_universe, static_universe
-from src.data.quality import (clean_history, drop_incomplete_bar, project_partial_volume, resolve_session,
-                              validate_history)
+from src.data.quality import (clean_history, drop_holiday_rows, drop_incomplete_bar, project_partial_volume,
+                              resolve_session, validate_history)
 from src.models import Candidate, QualityReport, RunResult
 from src.parallel import pmap
 from src.scanner.liquidity import quick_liquid
@@ -162,6 +162,8 @@ def run_scan(
     enriched = dict(zip(syms, pmap(partial(enrich, cfg=S), [liquid[s] for s in syms], P.get("workers", 0))))
 
     # ── ④ FULL SCANNER ───────────────────────────────────────────
+    if benchmark is not None and not benchmark.empty:
+        benchmark = drop_holiday_rows(benchmark.sort_index())
     regime = MarketAgent(R).run(benchmark, enriched)
     full_scan, cands = TechnicalAgent(S).run(enriched, benchmark, universe)
 
