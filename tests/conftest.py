@@ -48,3 +48,19 @@ def uptrend():
 @pytest.fixture
 def breakout_df():
     return add_breakout(make_ohlcv(seed=2))
+
+
+@pytest.fixture(autouse=True)
+def _offline(monkeypatch):
+    """The suite must never touch the network (it runs on GitHub before every scan).
+    Tests that need a provider monkeypatch it themselves, which overrides this guard."""
+    import yfinance
+
+    from src.data import nse
+
+    def blocked(*_a, **_k):
+        raise RuntimeError("network access attempted inside a unit test")
+
+    monkeypatch.setattr(nse, "_get", blocked)
+    monkeypatch.setattr(yfinance, "download", blocked)
+    monkeypatch.setattr(yfinance, "Ticker", blocked)
