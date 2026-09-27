@@ -1,6 +1,6 @@
 # Srikanth Swing Trade Agent
 
-A transparent NSE swing-trading **research** agent. Every weekday after market close it scans the universe, validates the data, scores each stock on technical, fundamental, sector and event evidence, applies risk rules, and publishes **next-session setups** (entry trigger, stop loss, targets, R:R, quantity) as Excel, JSON and Markdown.
+A transparent NSE swing-trading **research** agent for the **Nifty 500**. Every weekday at 10:30 and 14:45 IST it scans the universe, validates the data, scores each stock on technical, fundamental, sector and event evidence, applies risk rules, and publishes **next-session setups** (entry trigger, stop loss, targets, R:R, quantity) as Excel, JSON and Markdown.
 
 > It does **not** place broker orders. Output is decision support, not investment advice.
 
@@ -25,7 +25,7 @@ A transparent NSE swing-trading **research** agent. Every weekday after market c
 config/
   settings.yaml           run, data-quality, scanner and scoring settings
   financial_rules.yaml    risk, regime, setup, fundamental and event rules
-  universe.yaml           symbols (map SYMBOL: sector, or a plain list) or a live NSE index
+  universe.yaml           source: nifty500 (live NSE list); the symbols listed there are only a fallback
 src/
   main.py                 CLI  →  python -m src.main scan
   config.py · models.py
@@ -104,7 +104,17 @@ To scan your own list, put one symbol per line in `data/input/watchlist.txt`. If
 | Morning | **10:30:00 IST** | Setups from the previous day's completed candle, plus a live status for each one today: triggered, not triggered yet, skipped (opened above the don't-chase price), T1 hit, or stopped out |
 | Afternoon | **14:45:00 IST** | A **provisional** scan on today's candle, with today's volume projected to a full day. Use it to spot breakouts before the 15:30 close. The report is labelled provisional because the candle isn't final |
 
-GitHub often starts scheduled jobs 5–20 minutes late. To make the start time exact, each cron fires 20 minutes early. The job installs, runs the tests, then waits until exactly 10:30:00 or 14:45:00 IST before scanning. If GitHub is more than 20 minutes late, the run starts straight away and the job log shows a warning. The report is ready and emailed about 2–4 minutes after the start.
+GitHub often starts scheduled jobs 5–20 minutes late. To make the start time exact, each cron fires 20 minutes early. While it waits, the job installs, runs the tests and **prefetches** 420 days of price history for every stock (`python -m src.main prefetch`). At exactly 10:30:00 or 14:45:00 IST the scan starts. It reads the prefetched history and downloads only the latest candles:
+- **Morning:** just the day's setups, for their live status.
+- **Afternoon:** every liquid stock.
+
+The report is emailed about a minute after the start. If GitHub is more than 20 minutes late, the run starts straight away and the job log shows a warning.
+
+**Speed and reliability:**
+- Yahoo downloads are retried automatically, in smaller batches with a pause between tries.
+- Clearly illiquid stocks are dropped before the indicator step.
+- Indicators and confluence run on all CPU cores.
+- The daily history keeps only the Markdown and Excel copies; the JSON is kept as the latest copy only, which stops the repo growing quickly.
 
 Each run uploads the reports as an artifact and commits them to `data/output/`. It also keeps a copy per run type in `data/output/history/<date>/`. You can run it by hand from **Actions → Daily Swing Trade Agent → Run workflow**, and choose the run type (auto, morning, afternoon or eod) and the universe.
 
