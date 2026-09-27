@@ -110,3 +110,37 @@ def drop_incomplete_bar(df: pd.DataFrame, now_ist: datetime) -> tuple[pd.DataFra
     if pd.Timestamp(df.index[-1]).date() == now_ist.date():
         return df.iloc[:-1], True
     return df, False
+
+
+SESSION_MINUTES = 375    # 09:15 → 15:30
+
+
+def session_fraction(now_ist: datetime) -> float:
+    """Share of today's trading session that has elapsed (0.05–1.0)."""
+    mins = (now_ist.hour * 60 + now_ist.minute) - (MARKET_OPEN[0] * 60 + MARKET_OPEN[1])
+    return max(0.05, min(1.0, mins / SESSION_MINUTES))
+
+
+def resolve_session(requested: str | None, now_ist: datetime, afternoon_from: tuple[int, int] = (13, 0)) -> str:
+    """morning | afternoon | eod.
+
+    morning   → setups from the last completed candle + live status of each setup today
+    afternoon → provisional scan on today's still-forming candle (volume projected to a full day)
+    eod       → final scan on completed candles (post-close / weekends)
+    """
+    if requested and requested != "auto":
+        return requested
+    if is_session_incomplete(now_ist):
+        return "morning" if (now_ist.hour, now_ist.minute) < afternoon_from else "afternoon"
+    return "eod"
+
+
+def project_partial_volume(df: pd.DataFrame, now_ist: datetime) -> tuple[pd.DataFrame, bool]:
+    """Scale today's partial volume up to a full-day estimate (linear in elapsed session time)."""
+    if df is None or df.empty or not is_session_incomplete(now_ist):
+        return df, False
+    if pd.Timestamp(df.index[-1]).date() != now_ist.date():
+        return df, False
+    out = df.copy()
+    out.iloc[-1, out.columns.get_loc("Volume")] = float(out["Volume"].iloc[-1]) / session_fraction(now_ist)
+    return out, True
