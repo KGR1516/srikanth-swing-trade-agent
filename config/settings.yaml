@@ -6,6 +6,9 @@ project:
   name: srikanth-swing-trade-agent
   timezone: Asia/Kolkata
   holding_days: 5              # time stop: exit if T1 not reached within N sessions
+  # Runs (see .github/workflows): 10:30 IST "morning" and 14:45 IST "afternoon".
+  # Before this time an intraday run is "morning", after it "afternoon"; after 16:00 → "eod".
+  afternoon_from: "13:00"
 
 paths:
   raw: data/raw
