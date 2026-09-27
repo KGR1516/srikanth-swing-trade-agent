@@ -98,10 +98,13 @@ class ReportAgent:
     @staticmethod
     def _email(res: RunResult, xlsx: Path | None) -> None:
         """Gmail SMTP with an App Password (same secrets as srikanth-stock-2)."""
-        sender, password = os.getenv("GMAIL_ADDRESS"), os.getenv("GMAIL_APP_PASSWORD")
+        sender = (os.getenv("GMAIL_ADDRESS") or "").strip()
+        # Google displays app passwords as "abcd efgh ijkl mnop"; the real password has no spaces,
+        # and a pasted secret often carries a trailing newline — strip all whitespace.
+        password = "".join((os.getenv("GMAIL_APP_PASSWORD") or "").split())
         if not (sender and password):
             return
-        recipient = os.getenv("RECIPIENT_EMAIL") or sender
+        recipient = (os.getenv("RECIPIENT_EMAIL") or "").strip() or sender
         try:
             with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
                 server.starttls()
@@ -109,7 +112,11 @@ class ReportAgent:
                 server.send_message(build_email(res, sender, recipient, xlsx))
             log.info("Email sent to %s", recipient)
         except Exception as exc:  # a mail failure must never fail the run
-            log.warning("Email failed: %s", exc)
+            hint = ""
+            if "535" in str(exc):
+                hint = (" — Gmail rejected the login: check GMAIL_ADDRESS is the account that created the "
+                        "App Password, 2-Step Verification is on, and the App Password hasn't been revoked")
+            log.warning("Email failed: %s%s", exc, hint)
 
     @staticmethod
     def _telegram(res: RunResult) -> None:
