@@ -43,6 +43,8 @@ def to_payload(res: RunResult) -> dict:
     return _clean(json.loads(json.dumps({
         "as_of": res.as_of,
         "generated_at": res.generated_at,
+        "session": res.session,
+        "session_label": res.session_label,
         "capital": res.capital,
         "universe_size": res.universe_size,
         "data_sources": res.data_sources,

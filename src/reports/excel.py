@@ -100,6 +100,7 @@ def _summary(wb: Workbook, res: RunResult) -> None:
     ws["A2"] = f"Setups for the session after {res.as_of} · generated {res.generated_at}"
     ws["A2"].font = Font(italic=True, color="595959")
     items = [
+        ("Run", res.session_label or res.session),
         ("Market regime", r.regime.upper()),
         ("Risk multiplier", r.exposure),
         ("Nifty 50 close", r.benchmark_close),
@@ -119,8 +120,11 @@ def _summary(wb: Workbook, res: RunResult) -> None:
         c = ws.cell(row=i, column=2, value=v)
         if k in ("Capital (₹)", "Total ₹ at risk if all stops hit"):
             c.number_format = INR
-    ws["B4"].fill = PatternFill("solid", fgColor=REGIME_FILL.get(r.regime, "FFFFFF"))
-    ws["B4"].font = BOLD
+    ws["B5"].fill = PatternFill("solid", fgColor=REGIME_FILL.get(r.regime, "FFFFFF"))
+    ws["B5"].font = BOLD
+    if res.session == "afternoon":
+        ws["B4"].fill = PatternFill("solid", fgColor="FFEB9C")
+        ws["B4"].font = BOLD
     row = 4 + len(items) + 1
     ws.cell(row=row, column=1, value="Regime notes").font = BOLD
     for n in r.notes:
@@ -152,18 +156,20 @@ def _action_counts(res: RunResult) -> dict[str, int]:
 
 def _setups(wb: Workbook, res: RunResult) -> None:
     ws = wb.create_sheet("Next Session Setups")
-    headers = ["Rank", "Symbol", "Action", "Sector", "Setup", "Grade", "Live Status", "Follow-through", "Close",
+    headers = ["Rank", "Symbol", "Action", "Today (live)", "Last", "Sector", "Setup", "Grade", "Live Status",
+               "Follow-through", "Close",
                "Entry Trigger", "Don't Chase Above", "Stop Loss", "Stop %", "Risk/Share", "Target 1", "Target 2",
                "R:R T1", "R:R T2", "Qty", "Position ₹", "₹ At Risk", "Room to 52W High (R)", "Valid Sessions",
                "Time Stop (sessions)", "Technical", "RS %ile", "Sector Score", "Fundamental", "Event",
                "Confluence", "Penalty", "Final Score", "Key Risks"]
-    rows = [[s.rank, s.symbol, s.action, s.sector, s.setup_type, s.breakout_grade, s.live_status, s.follow_through,
+    rows = [[s.rank, s.symbol, s.action, s.today_status or "—", s.today_last, s.sector, s.setup_type,
+             s.breakout_grade, s.live_status, s.follow_through,
              s.close, s.entry_trigger, s.entry_limit, s.stop, s.stop_pct, s.risk_per_share, s.target1, s.target2,
              s.rr_t1, s.rr_t2, s.quantity, s.position_value, s.capital_at_risk, s.room_to_52w_high_r,
              s.valid_sessions, s.time_stop_sessions, s.technical_score, s.rs_percentile, s.sector_score,
              s.fundamental_score, s.event_score, s.confluence_score, s.penalty, s.final_score,
              " | ".join(s.risks)] for s in res.setups]
-    fmts = {h: PRICE for h in ["Close", "Entry Trigger", "Don't Chase Above", "Stop Loss", "Risk/Share",
+    fmts = {h: PRICE for h in ["Close", "Last", "Entry Trigger", "Don't Chase Above", "Stop Loss", "Risk/Share",
                                 "Target 1", "Target 2"]}
     fmts.update({"Stop %": PCT, "Position ₹": INR, "₹ At Risk": INR, "Qty": INT})
     _table(ws, headers, rows, fmts)

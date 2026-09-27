@@ -19,6 +19,8 @@ def render_markdown(res: RunResult) -> str:
         "",
         f"_Generated {res.generated_at} · Universe {res.universe_size} · Capital {_inr(res.capital)}_",
         "",
+        f"**{res.session_label}**" if res.session_label else "",
+        "",
         f"## Market regime: {REGIME_ICON.get(r.regime, '')} {r.regime.upper()} (risk × {r.exposure:g})",
         "",
         f"- Nifty 50: {r.benchmark_close:,.2f} ({r.benchmark_return_20d_pct:+.2f}% 20D)",
@@ -43,6 +45,9 @@ def render_markdown(res: RunResult) -> str:
                 f"{s.entry_limit:,.2f} | {s.stop:,.2f} | {s.stop_pct:.1f}% | {s.target1:,.2f} ({s.rr_t1:g}R) | "
                 f"{s.target2:,.2f} ({s.rr_t2:g}R) | {s.quantity} | {_inr(s.capital_at_risk)} | {s.final_score:.0f} |"
             )
+        live = [s for s in res.setups if s.today_status]
+        if live:
+            L += ["", "### Live status today", ""] + [f"- **{s.symbol}** — {s.today_status}" for s in live]
         L += ["", "**Execution rules:** buy-stop at the entry trigger · skip if the open gaps above the "
               "“don't chase” price · cancel if not triggered within "
               f"{res.setups[0].valid_sessions} sessions · exit if T1 isn't hit within "
