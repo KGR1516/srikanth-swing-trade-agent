@@ -26,6 +26,13 @@ data:
   nse_bhavcopy_crosscheck: true    # compare last close with official NSE bhavcopy
   crosscheck_tolerance_pct: 1.5
   max_workers: 8
+  download_batch_size: 50      # tickers per Yahoo request batch
+  download_retries: 2          # missing tickers are retried with smaller batches + back-off
+  refresh_recent_days: 5       # after a prefetch, only this many recent days are re-downloaded
+
+performance:
+  workers: 0                   # CPU processes for indicators / confluence (0 = all cores)
+  prefilter_liquidity: true    # skip clearly illiquid stocks before computing indicators
 
 # ③ DATA QUALITY ───────────────────────────────────────────────
 data_quality:
@@ -130,6 +137,7 @@ report:
   watchlist_n: 25
   filename: swing_agent        # → swing_agent.xlsx / .json / .md
   archive_daily: true          # also keep data/output/history/YYYY-MM-DD/
+  archive_formats: [md, xlsx]  # JSON (largest file) is kept only as the latest copy
   excel: true
   json: true
   markdown: true

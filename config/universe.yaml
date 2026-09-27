@@ -8,9 +8,11 @@
 # Symbols are NSE tickers without the ".NS" suffix.
 # ─────────────────────────────────────────────────────────────
 
-source: static
+source: nifty500
 exchange_suffix: ".NS"
 watchlist_file: data/input/watchlist.txt
+
+# Fallback list — only used if NSE's live Nifty 500 list can't be downloaded.
 
 symbols:
   # Banks & financials
