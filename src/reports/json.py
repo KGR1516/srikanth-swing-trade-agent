@@ -47,6 +47,7 @@ def to_payload(res: RunResult) -> dict:
         "session_label": res.session_label,
         "capital": res.capital,
         "universe_size": res.universe_size,
+        "universe_name": res.universe_name,
         "data_sources": res.data_sources,
         "market_regime": asdict(res.regime),
         "setups": [s.to_dict() for s in res.setups],

@@ -106,7 +106,7 @@ def _summary(wb: Workbook, res: RunResult) -> None:
         ("Nifty 50 close", r.benchmark_close),
         ("Nifty 20D return %", r.benchmark_return_20d_pct),
         ("Breadth (% > 50-EMA)", r.breadth_pct),
-        ("Universe scanned", res.universe_size),
+        ("Universe scanned", f"{res.universe_name or 'Custom'} — {res.universe_size} stocks"),
         ("Passed data quality", sum(q.status != "FAIL" for q in res.quality)),
         ("Next-session setups", len(res.setups)),
         ("Watchlist", len(res.watchlist)),

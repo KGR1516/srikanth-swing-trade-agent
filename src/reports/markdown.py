@@ -17,7 +17,8 @@ def render_markdown(res: RunResult) -> str:
     L: list[str] = [
         f"# Swing Trade Agent — setups for the session after {res.as_of}",
         "",
-        f"_Generated {res.generated_at} · Universe {res.universe_size} · Capital {_inr(res.capital)}_",
+        f"_Generated {res.generated_at} · Universe: {res.universe_name or 'custom'} ({res.universe_size} stocks) · "
+        f"Capital {_inr(res.capital)}_",
         "",
         f"**{res.session_label}**" if res.session_label else "",
         "",
