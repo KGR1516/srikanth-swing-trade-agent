@@ -7,7 +7,7 @@ A transparent NSE swing-trading **research** agent. Every weekday after market c
 ## Pipeline
 
 ```
-① SCHEDULE        GitHub Actions, 17:00 IST Mon–Fri
+① SCHEDULE        GitHub Actions, 10:30 and 14:45 IST sharp, Mon–Fri
 ② MARKET DATA     Yahoo Finance adjusted OHLCV  +  NSE bhavcopy close cross-check
 ③ DATA QUALITY    history length · staleness · OHLC sanity · unadjusted splits · zero volume · NSE mismatch
 ④ FULL SCANNER    Technical (liquidity, breakout + grade, pre-breakout, pullback, momentum, RS 3M+1M)
@@ -97,7 +97,18 @@ To scan your own list, put one symbol per line in `data/input/watchlist.txt`. If
 
 ## GitHub Actions
 
-`.github/workflows/daily-swing-agent.yml` runs at 17:00 IST on weekdays. It runs the tests, then the agent, uploads the reports as an artifact and commits them to `data/output/`. You can also run it manually from **Actions → Daily Swing Trade Agent → Run workflow**, with an optional universe override.
+`.github/workflows/daily-swing-agent.yml` runs twice every weekday:
+
+| Run | Starts | What it does |
+|---|---|---|
+| Morning | **10:30:00 IST** | Setups from the previous day's completed candle, plus a live status for each one today: triggered, not triggered yet, skipped (opened above the don't-chase price), T1 hit, or stopped out |
+| Afternoon | **14:45:00 IST** | A **provisional** scan on today's candle, with today's volume projected to a full day. Use it to spot breakouts before the 15:30 close. The report is labelled provisional because the candle isn't final |
+
+GitHub often starts scheduled jobs 5–20 minutes late. To make the start time exact, each cron fires 20 minutes early. The job installs, runs the tests, then waits until exactly 10:30:00 or 14:45:00 IST before scanning. If GitHub is more than 20 minutes late, the run starts straight away and the job log shows a warning. The report is ready and emailed about 2–4 minutes after the start.
+
+Each run uploads the reports as an artifact and commits them to `data/output/`. It also keeps a copy per run type in `data/output/history/<date>/`. You can run it by hand from **Actions → Daily Swing Trade Agent → Run workflow**, and choose the run type (auto, morning, afternoon or eod) and the universe.
+
+From the command line, use `python -m src.main scan --session morning|afternoon|eod`. The default, `auto`, picks the run type from the IST clock.
 
 - Optional email with the Excel report attached: add the secrets `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` (a Gmail App Password) and `RECIPIENT_EMAIL`. These are the same secrets srikanth-stock-2 uses.
 - Optional Telegram alert: add the repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
