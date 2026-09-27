@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────
+# Risk, setup, fundamental and event rules
+# ─────────────────────────────────────────────────────────────
+
+# ⑥ RISK ENGINE ────────────────────────────────────────────────
+risk:
+  risk_per_trade_pct: 1.0       # % of capital lost if stop is hit
+  max_position_pct: 15.0        # max % of capital in one stock
+  max_open_positions: 6
+  max_per_sector: 2
+  atr_stop_multiple: 1.5
+  swing_low_lookback: 10        # bars for structural stop
+  stop_buffer_atr: 0.10         # stop placed 0.1 × ATR below swing low
+  min_stop_pct: 1.5             # never tighter than this (noise)
+  min_stop_atr: 1.0             # never tighter than 1 × ATR
+  max_stop_pct: 8.0             # reject if a wider stop is required
+  min_reward_risk: 2.0
+  target_r_multiples: [2.0, 3.0]
+
+market_regime:
+  breadth_bullish_pct: 55       # % of universe above 50-EMA
+  breadth_bearish_pct: 40
+  exposure:                     # multiplier on risk per trade
+    bullish: 1.0
+    neutral: 0.5
+    bearish: 0.0                # no new longs in a bearish tape
+
+# ⑦ SETUP ENGINE ───────────────────────────────────────────────
+setup:
+  entry_buffer_atr: 0.10        # trigger = level + 0.1 × ATR
+  max_gap_up_pct: 2.0           # skip if next open is > 2% above trigger
+  valid_sessions: 2             # cancel if not triggered in N sessions
+  tick_size: 0.05               # NSE equity tick
+
+# FUNDAMENTALS ─────────────────────────────────────────────────
+fundamentals:
+  thresholds:
+    min_roe_pct: 12
+    max_debt_to_equity: 1.0     # ratio (Yahoo reports %, converted in code)
+    min_revenue_growth_pct: 5
+    min_eps_growth_pct: 0
+    min_profit_margin_pct: 5
+    max_pe: 80
+    min_market_cap_cr: 1000
+  weights:
+    roe: 25
+    debt_to_equity: 20
+    revenue_growth: 15
+    eps_growth: 20
+    profit_margin: 10
+    valuation: 10
+  pe_caution: 60                # P/E above this → risk note (stock-2 FUND_PE_CAUTION)
+  missing_data_score: 50        # neutral when data unavailable
+  min_coverage_pct: 40          # below this weight coverage → neutral score
+
+# ⑤ EVENT CHECK ────────────────────────────────────────────────
+events:
+  earnings_blackout_days: 5     # results within N days → event risk
+  exclude_in_blackout: true
+  ex_dividend_warning_days: 3

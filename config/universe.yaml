@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────
+# Stock universe
+#   source: "static"   → use the symbols below
+#           "nifty50" / "nifty100" / "nifty200" / "nifty500" → live NSE index list
+#           "full_nse" → every EQ-series stock listed on NSE (~2,000; slow)
+#   Live lists fall back to the static list if NSE is unreachable.
+#   If watchlist_file has any symbols, it overrides everything (stock-2 behaviour).
+# Symbols are NSE tickers without the ".NS" suffix.
+# ─────────────────────────────────────────────────────────────
+
+source: static
+exchange_suffix: ".NS"
+watchlist_file: data/input/watchlist.txt
+
+symbols:
+  # Banks & financials
+  HDFCBANK: Financial Services
+  ICICIBANK: Financial Services
+  SBIN: Financial Services
+  KOTAKBANK: Financial Services
+  AXISBANK: Financial Services
+  INDUSINDBK: Financial Services
+  BAJFINANCE: Financial Services
+  BAJAJFINSV: Financial Services
+  SHRIRAMFIN: Financial Services
+  SBILIFE: Financial Services
+  HDFCLIFE: Financial Services
+  # IT
+  TCS: Information Technology
+  INFY: Information Technology
+  HCLTECH: Information Technology
+  WIPRO: Information Technology
+  TECHM: Information Technology
+  PERSISTENT: Information Technology
+  # Energy, power & utilities
+  RELIANCE: Oil Gas & Consumable Fuels
+  ONGC: Oil Gas & Consumable Fuels
+  COALINDIA: Oil Gas & Consumable Fuels
+  NTPC: Power
+  POWERGRID: Power
+  # Autos
+  MARUTI: Automobile and Auto Components
+  M&M: Automobile and Auto Components
+  BAJAJ-AUTO: Automobile and Auto Components
+  EICHERMOT: Automobile and Auto Components
+  HEROMOTOCO: Automobile and Auto Components
+  TVSMOTOR: Automobile and Auto Components
+  # FMCG & consumer
+  HINDUNILVR: Fast Moving Consumer Goods
+  ITC: Fast Moving Consumer Goods
+  NESTLEIND: Fast Moving Consumer Goods
+  BRITANNIA: Fast Moving Consumer Goods
+  TATACONSUM: Fast Moving Consumer Goods
+  TITAN: Consumer Durables
+  ASIANPAINT: Consumer Durables
+  DIXON: Consumer Durables
+  TRENT: Consumer Services
+  # Pharma & healthcare
+  SUNPHARMA: Healthcare
+  DRREDDY: Healthcare
+  CIPLA: Healthcare
+  DIVISLAB: Healthcare
+  APOLLOHOSP: Healthcare
+  LUPIN: Healthcare
+  # Metals & materials
+  TATASTEEL: Metals & Mining
+  JSWSTEEL: Metals & Mining
+  HINDALCO: Metals & Mining
+  ULTRACEMCO: Construction Materials
+  GRASIM: Construction Materials
+  # Industrials & capital goods
+  LT: Construction
+  BEL: Capital Goods
+  HAL: Capital Goods
+  POLYCAB: Capital Goods
+  CUMMINSIND: Capital Goods
+  ADANIPORTS: Services
+  ADANIENT: Metals & Mining
+  # Telecom
+  BHARTIARTL: Telecommunication

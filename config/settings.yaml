@@ -1,0 +1,134 @@
+# ─────────────────────────────────────────────────────────────
+# Srikanth Swing Trade Agent — run & scanner settings
+# ─────────────────────────────────────────────────────────────
+
+project:
+  name: srikanth-swing-trade-agent
+  timezone: Asia/Kolkata
+  holding_days: 5              # time stop: exit if T1 not reached within N sessions
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  output: data/output
+
+capital:
+  total: 500000                # trading capital (INR) used for position sizing
+
+# ② MARKET DATA ────────────────────────────────────────────────
+data:
+  lookback_days: 420           # calendar days of daily history
+  benchmark: "^NSEI"           # Nifty 50 (Yahoo symbol)
+  exchange_suffix: ".NS"
+  nse_bhavcopy_crosscheck: true    # compare last close with official NSE bhavcopy
+  crosscheck_tolerance_pct: 1.5
+  max_workers: 8
+
+# ③ DATA QUALITY ───────────────────────────────────────────────
+data_quality:
+  min_history_bars: 220        # 200-EMA + buffer
+  max_staleness_days: 4        # last bar age (calendar days) — covers weekends
+  max_daily_move_pct: 25       # bigger single-day move = likely unadjusted split / bad tick
+  max_zero_volume_days: 3      # within last 20 bars
+  min_pass_ratio: 0.5          # abort (keep yesterday's report) if < 50% of universe has usable data
+  drop_incomplete_bar: true    # manual run during market hours → ignore today's partial candle
+
+# ④ FULL SCANNER ───────────────────────────────────────────────
+technical:
+  ema_fast: 20
+  ema_mid: 50
+  ema_slow: 200
+  rsi_period: 14
+  atr_period: 14
+  adx_period: 14
+  breakout_lookback: 20
+  week52_bars: 252
+
+# Extra indicators (from srikanth-stock-2) — shown in Full Scan, some feed momentum
+indicators:
+  major_lookback: 60           # highest CLOSE of last 60 sessions = major breakout level
+  bbands_period: 20
+  bbands_std: 2.0
+  supertrend_period: 10
+  supertrend_multiplier: 3.0
+  obv_rising_bars: 10          # OBV above its value 10 sessions ago = accumulation
+  vwap_window: 20
+
+scanner:
+  liquidity:
+    min_price: 50
+    min_avg_volume: 250000
+    min_avg_traded_value_cr: 10      # ₹ crore / day, 20-day average
+  breakout:
+    volume_ratio_min: 1.5            # today's volume vs prior 20-day average
+    max_extension_pct: 5.0           # skip if already > 5% above breakout level
+    min_close_range_pos: 0.5         # close in upper half of day's range
+    grades:                          # stock-2 setup grades vs breakout level
+      strong_fresh: {max_pct_above: 1.0, min_volume_x: 5.0, max_rsi: 70}
+      fresh:        {max_pct_above: 2.0, min_volume_x: 5.0, max_rsi: 70}
+      solid:        {max_pct_above: 3.0, min_volume_x: 3.0, max_rsi: 75}
+      extended_pct: 5.0              # > 5% above level  → Extended
+      extended_rsi: 75               # or RSI ≥ 75        → Extended
+      grade_bonus: {Strong Fresh: 5, Fresh: 3}   # added to technical score
+      extended_policy: watchlist     # Extended breakout → watchlist ("wait for pullback") | allow
+    failed_lookback: 5               # breakout in last N sessions now back below level → Failed
+  pre_breakout:
+    near_high_pct: 3.0               # within 3% below 20D high
+    max_base_depth_pct: 12.0         # 20D high-low range as % of price
+  momentum:
+    rsi_min: 50
+    rsi_max: 72
+    adx_min: 20
+    min_pct_of_52w_high: 75
+    pass_score: 60
+  pullback:
+    rsi_min: 40
+    rsi_max: 55
+    max_dist_from_ema20_pct: 2.0
+  relative_strength:
+    period: 63                       # ~3 months
+    short_period: 20                 # ~1 month (stock-2 RS_LOOKBACK)
+    blend: {long: 0.7, short: 0.3}   # percentile = 70% 3M rank + 30% 1M rank
+    min_rs_percentile: 65
+  sector:
+    period: 63
+
+# Full pandas-ta-classic catalogue → one bullish/bearish consensus (stock-2 "confluence")
+confluence:
+  enabled: true                # needs `pandas-ta-classic`; skipped automatically if missing
+  min_votes: 3                 # per category
+
+scoring:
+  # Confluence added at 15%; the other five were scaled ×0.85 so their balance is unchanged.
+  # If confluence is unavailable its weight is dropped and the rest renormalise to the old 40/20/20/10/10.
+  weights:
+    technical: 0.34
+    relative_strength: 0.17
+    fundamental: 0.17
+    sector: 0.085
+    event: 0.085
+    confluence: 0.15
+  penalties:                   # stock-2 penalties, applied after weighting
+    loss_making: -8
+    failed_breakout: -15
+  action_bands:                # stock-2 verdicts (score ≥ threshold)
+    - {min: 80, action: BUY NOW}
+    - {min: 65, action: BUY}
+    - {min: 50, action: WATCH}
+    - {min: 35, action: AVOID}
+    - {min: 0,  action: SKIP}
+  min_technical_score: 55      # to enter the shortlist
+  shortlist_size: 30           # names sent to fundamental + event checks
+  min_final_score: 60          # to become a next-session setup
+
+# ⑧ FINAL REPORT ───────────────────────────────────────────────
+report:
+  top_n: 10                    # max setups in report (after portfolio limits)
+  watchlist_n: 25
+  filename: swing_agent        # → swing_agent.xlsx / .json / .md
+  archive_daily: true          # also keep data/output/history/YYYY-MM-DD/
+  excel: true
+  json: true
+  markdown: true
+  email: true                  # sends if GMAIL_ADDRESS / GMAIL_APP_PASSWORD are set
+  telegram: true               # sends if TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are set
