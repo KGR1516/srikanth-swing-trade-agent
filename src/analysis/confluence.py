@@ -264,3 +264,12 @@ def confluence_signals(df: pd.DataFrame, min_votes: int = 3) -> dict:
         "conf_volume": per_category.get("volume"),
         "indicators_computed": total_cols,
     }
+
+
+def safe_confluence(df: pd.DataFrame, min_votes: int = 3) -> dict:
+    """Process-pool friendly wrapper: never raises, returns {} on failure."""
+    try:
+        return confluence_signals(df, min_votes)
+    except Exception as exc:  # one bad indicator/symbol must not break the run
+        log.debug("confluence failed: %s", exc)
+        return {}
