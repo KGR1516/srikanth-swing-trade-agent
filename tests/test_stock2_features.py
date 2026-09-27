@@ -119,7 +119,7 @@ def test_email_has_summary_and_attachment(cfg, tmp_path):
     parsed = message_from_bytes(msg.as_bytes())
     assert res.as_of in parsed["Subject"]
     parts = list(parsed.walk())
-    assert any(p.get_filename() == f"swing_agent_{res.as_of}.xlsx" for p in parts)
+    assert any(p.get_filename() == f"swing_agent_{res.as_of}_{res.session}.xlsx" for p in parts)
     body = next(p for p in parts if p.get_content_type() == "text/plain").get_payload(decode=True).decode()
     assert res.setups[0].symbol in body and "not investment advice" in body
 

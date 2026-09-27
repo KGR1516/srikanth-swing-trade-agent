@@ -1,6 +1,6 @@
 """End-to-end offline run of the full 8-stage pipeline."""
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import openpyxl
 
@@ -38,6 +38,7 @@ def _run(cfg, tmp_path, capital=500000):
         fundamentals_fn=lambda syms: {s: GOOD_FUND for s in syms},
         events_fn=lambda syms: {s: events.get(s, {"next_earnings": None, "ex_dividend": None}) for s in syms},
         as_of=AS_OF, output_dir=tmp_path,
+        now=datetime(AS_OF.year, AS_OF.month, AS_OF.day, 17, 0),   # deterministic post-close run
     )
 
 
