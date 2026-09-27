@@ -21,7 +21,8 @@ XLSX_MIME = ("application", "vnd.openxmlformats-officedocument.spreadsheetml.she
 def summary_lines(res: RunResult) -> list[str]:
     """Plain-text digest shared by email and Telegram."""
     r = res.regime
-    lines = [res.session_label or f"Swing setups for the session after {res.as_of}",
+    lines = [(f"[{res.universe_name}, {res.universe_size} stocks] " if res.universe_name else "")
+             + (res.session_label or f"Swing setups for the session after {res.as_of}"),
              f"Regime: {r.regime.upper()} (risk ×{r.exposure:g}) · breadth {r.breadth_pct:.0f}%", ""]
     for s in res.setups:
         grade = f" {s.breakout_grade}" if s.breakout_grade else ""
@@ -42,6 +43,8 @@ def build_email(res: RunResult, sender: str, recipient: str, attachment: Path | 
     msg = EmailMessage()
     n = len(res.setups)
     tag = {"morning": "Morning", "afternoon": "Afternoon · PROVISIONAL", "eod": "Post-close"}.get(res.session, "")
+    if res.universe_name:
+        tag = f"{res.universe_name} · {tag}"
     msg["Subject"] = (f"Swing Agent [{tag}] {res.as_of}: {n} setup{'s' if n != 1 else ''} · "
                       f"{res.regime.regime.upper()} market")
     msg["From"], msg["To"] = sender, recipient
@@ -76,8 +79,10 @@ class ReportAgent:
         if self.cfg.get("archive_daily", False):
             arch = self.out_dir / "history" / res.as_of
             arch.mkdir(parents=True, exist_ok=True)
+            keep = {f".{x.lstrip('.')}" for x in self.cfg.get("archive_formats", ["md", "xlsx", "json"])}
             for p in written:  # keep morning / afternoon / eod side by side
-                shutil.copy2(p, arch / f"{p.stem}_{res.session}{p.suffix}")
+                if p.suffix in keep:
+                    shutil.copy2(p, arch / f"{p.stem}_{res.session}{p.suffix}")
 
         for p in written:
             log.info("Report written: %s", p)

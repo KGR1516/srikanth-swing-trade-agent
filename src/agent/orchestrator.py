@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
+from functools import partial
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -28,11 +29,13 @@ from src.analysis.sector import sector_strength
 from src.analysis.setup import live_check
 from src.analysis.technical import enrich
 from src.config import ROOT, Config, load_config
-from src.data.market_data import load_prices
-from src.data.nse import fetch_bhavcopy, get_universe
+from src.data.market_data import load_prices, refresh_recent
+from src.data.nse import fetch_bhavcopy, resolve_universe, static_universe
 from src.data.quality import (clean_history, drop_incomplete_bar, project_partial_volume, resolve_session,
                               validate_history)
 from src.models import Candidate, QualityReport, RunResult
+from src.parallel import pmap
+from src.scanner.liquidity import quick_liquid
 
 log = logging.getLogger("swing_agent")
 
@@ -63,23 +66,38 @@ def run_scan(
     log.info("Run session: %s (%s IST)", session, now.strftime("%H:%M"))
 
     # ── ② MARKET DATA ────────────────────────────────────────────
-    universe = get_universe(cfg.universe, ROOT)
     sources: list[str] = []
     bhav = None
+    n_cached = 0
+    D, P = S["data"], S.get("performance") or {}
+    suffix = D["exchange_suffix"]
     if prices is None:
-        log.info("② Market data: %d symbols + benchmark %s", len(universe), S["data"]["benchmark"])
-        prices, benchmark = load_prices(
-            list(universe), S["data"]["benchmark"], S["data"]["lookback_days"],
-            cfg.path("raw"), S["data"]["exchange_suffix"],
+        universe, universe_name = resolve_universe(cfg.universe, ROOT)
+        log.info("② Market data: %d symbols (%s) + benchmark %s", len(universe), universe_name, D["benchmark"])
+        prices, benchmark, n_cached = load_prices(
+            list(universe), D["benchmark"], D["lookback_days"], cfg.path("raw"), suffix,
+            D.get("download_batch_size", 50), D.get("download_retries", 2),
         )
         sources.append("Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar)")
+        if n_cached and session == "afternoon":
+            # history was prefetched before the start time → only today's candle needs fetching now,
+            # and only for stocks liquid enough to matter
+            liquid_syms = [s for s, df in prices.items() if quick_liquid(df, S)]
+            n = refresh_recent(prices, liquid_syms, D.get("refresh_recent_days", 5), suffix,
+                               D.get("download_batch_size", 50))
+            bench_box = {D["benchmark"]: benchmark}
+            refresh_recent(bench_box, [D["benchmark"]], D.get("refresh_recent_days", 5), suffix)
+            benchmark = bench_box[D["benchmark"]]
+            sources.append(f"prefetched history + live refresh of {n} liquid stocks at {datetime.now(tz):%H:%M:%S} IST")
         if S["data"].get("nse_bhavcopy_crosscheck"):
             bhav = fetch_bhavcopy(today)
             if bhav is not None:
                 sources.append(f"NSE bhavcopy {bhav.attrs.get('date')} (close cross-check)")
-    else:
+    else:  # tests / notebooks: data supplied directly, no universe download
         sources.append("injected data")
-        universe = {s: universe.get(s, "Unclassified") for s in prices}
+        static = static_universe(cfg.universe)
+        universe = {s: static.get(s, "Unclassified") for s in prices}
+        universe_name = "Injected data"
 
     partial_bars: dict[str, pd.Series] = {}
     if session == "afternoon":
@@ -132,7 +150,16 @@ def run_scan(
             "Provider down or market holiday? Previous report left untouched."
         )
 
-    enriched = {s: enrich(df, S) for s, df in clean.items()}
+    if P.get("prefilter_liquidity", True):
+        liquid = {s: df for s, df in clean.items() if quick_liquid(df, S)}
+        skipped = len(clean) - len(liquid)
+        if skipped:
+            sources.append(f"{skipped} clearly illiquid stocks skipped before indicators")
+            log.info("Liquidity pre-filter: %d of %d stocks go to the scanner", len(liquid), len(clean))
+    else:
+        liquid = clean
+    syms = list(liquid)
+    enriched = dict(zip(syms, pmap(partial(enrich, cfg=S), [liquid[s] for s in syms], P.get("workers", 0))))
 
     # ── ④ FULL SCANNER ───────────────────────────────────────────
     regime = MarketAgent(R).run(benchmark, enriched)
@@ -192,6 +219,13 @@ def run_scan(
     setups = SetupAgent(S, R).run(shortlist, enriched, envelopes)
     chosen = {s.symbol for s in setups}
     if session == "morning":
+        if n_cached and setups:
+            # history came from the pre-start prefetch → fetch a fresh live candle for the setups only
+            fresh: dict[str, pd.DataFrame] = {}
+            refresh_recent(fresh, [s_.symbol for s_ in setups], D.get("refresh_recent_days", 5), suffix)
+            for sym, df in fresh.items():
+                if len(df) and pd.Timestamp(df.index[-1]).date() == now.date():
+                    partial_bars[sym] = df.iloc[-1]
         for s_ in setups:
             s_.today_status, s_.today_last = live_check(s_, partial_bars.get(s_.symbol))
     bands = sc.get("action_bands")
@@ -227,6 +261,7 @@ def run_scan(
         generated_at=datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z"),
         capital=float(S["capital"]["total"]),
         universe_size=len(universe),
+        universe_name=universe_name,
         regime=regime,
         setups=setups,
         watchlist=watchlist,

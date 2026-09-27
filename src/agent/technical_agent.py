@@ -157,11 +157,14 @@ class TechnicalAgent:
         if not conf_engine.available():
             log.warning("confluence enabled but pandas-ta-classic is not installed — weight dropped")
             return False
-        for c in candidates:
-            try:
-                res = conf_engine.confluence_signals(frames[c.symbol], c_cfg.get("min_votes", 3))
-            except Exception as exc:  # never let one indicator break a symbol
-                log.debug("confluence failed for %s: %s", c.symbol, exc)
+        from functools import partial
+
+        from src.parallel import pmap
+        workers = (self.cfg.get("performance") or {}).get("workers", 0)
+        fn = partial(conf_engine.safe_confluence, min_votes=c_cfg.get("min_votes", 3))
+        results = pmap(fn, [frames[c.symbol] for c in candidates], workers, min_items=8, chunksize=1)
+        for c, res in zip(candidates, results):
+            if not res:
                 continue
             c.confluence = res
             c.confluence_score = res.get("confluence_score")
