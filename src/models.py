@@ -120,6 +120,8 @@ class Setup:
     follow_through: str = ""
     score_breakdown: dict[str, Any] = field(default_factory=dict)
     confluence: dict[str, Any] = field(default_factory=dict)
+    today_status: str = ""                       # morning run: live status of the setup today
+    today_last: float | None = None
     status: str = "RESEARCH SETUP"
     evidence: list[Evidence] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
@@ -142,6 +144,8 @@ class RunResult:
     sectors: Any                      # pandas DataFrame
     quality: list[QualityReport]
     data_sources: list[str] = field(default_factory=list)
+    session: str = "eod"                          # morning | afternoon | eod
+    session_label: str = ""
     disclaimer: str = (
         "Research output only — not investment advice and not an order. "
         "Verify prices, results dates and liquidity before trading; size positions to your own risk tolerance."

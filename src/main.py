@@ -27,6 +27,8 @@ def scan(
         None, "--symbols", "-s", help="Comma-separated symbols to scan instead of the universe, e.g. RELIANCE,TCS"),
     top_n: Optional[int] = typer.Option(None, help="Max setups in the report."),
     no_confluence: bool = typer.Option(False, "--no-confluence", help="Skip the full-indicator confluence step."),
+    session: str = typer.Option(
+        "auto", help="auto | morning (setups + live status) | afternoon (provisional, today's candle) | eod"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Run the full pipeline and write Excel / JSON / Markdown reports."""
@@ -48,16 +50,19 @@ def scan(
         cfg.settings.setdefault("confluence", {})["enabled"] = False
 
     try:
-        res = run_scan(cfg)
+        res = run_scan(cfg, session=session)
     except DataUnavailableError as exc:
         typer.secho(f"ABORTED: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=2)
     r = res.regime
-    typer.echo(f"\nRegime {r.regime.upper()} (risk ×{r.exposure:g}) · breadth {r.breadth_pct:.0f}%")
+    typer.echo(f"\n{res.session_label}")
+    typer.echo(f"Regime {r.regime.upper()} (risk ×{r.exposure:g}) · breadth {r.breadth_pct:.0f}%")
     typer.echo(f"Completed scan: {len(res.setups)} next-session setups, {len(res.watchlist)} on watchlist.")
     for s in res.setups:
         typer.echo(f"  {s.rank}. {s.symbol:<12} {s.action:<8} {s.setup_type:<12} entry ≥ {s.entry_trigger:>10,.2f}  "
                    f"SL {s.stop:>10,.2f}  T1 {s.target1:>10,.2f}  T2 {s.target2:>10,.2f}  qty {s.quantity}")
+        if s.today_status:
+            typer.echo(f"       today: {s.today_status}")
 
 
 if __name__ == "__main__":
