@@ -1,13 +1,14 @@
 {
   "as_of": "2026-10-01",
-  "generated_at": "2026-10-01 16:41 IST",
-  "session": "morning",
-  "session_label": "Morning run 16:40 IST — setups from the 2026-10-01 close, with live status today",
+  "generated_at": "2026-10-01 21:17 IST",
+  "session": "afternoon",
+  "session_label": "Afternoon run 21:16 IST — PROVISIONAL: today's candle is not final until 15:30",
   "capital": 500000.0,
   "universe_size": 495,
   "universe_name": "Nifty 500",
   "data_sources": [
     "Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar)",
+    "prefetched history + live refresh of 486 liquid stocks at 21:17:05 IST",
     "NSE bhavcopy 2026-10-01 (close cross-check)",
     "7 clearly illiquid stocks skipped before indicators",
     "pandas-ta-classic indicator confluence"
@@ -75,9 +76,9 @@
         "revenue_growth_pct": 19.1,
         "eps_growth_pct": 27.800000000000004,
         "profit_margin_pct": 18.745,
-        "pe": 61.924023,
-        "market_cap_cr": 33480.7138304,
-        "trailing_eps": 32.38,
+        "pe": 61.90491,
+        "market_cap_cr": 33539.620864,
+        "trailing_eps": 32.39,
         "loss_making": false
       },
       "events": {
@@ -213,9 +214,9 @@
         "revenue_growth_pct": 23.7,
         "eps_growth_pct": 83.7,
         "profit_margin_pct": 2.795,
-        "pe": 83.045135,
+        "pe": 82.75778,
         "market_cap_cr": 22516.539392,
-        "trailing_eps": 2.88,
+        "trailing_eps": 2.89,
         "loss_making": false
       },
       "events": {
@@ -627,9 +628,9 @@
         "revenue_growth_pct": 39.300000000000004,
         "eps_growth_pct": 67.80000000000001,
         "profit_margin_pct": 15.769,
-        "pe": 79.53245,
+        "pe": 79.87542,
         "market_cap_cr": 118730.5750528,
-        "trailing_eps": 41.92,
+        "trailing_eps": 41.74,
         "loss_making": false
       },
       "events": {
@@ -697,9 +698,9 @@
         "revenue_growth_pct": 16.3,
         "eps_growth_pct": 25.8,
         "profit_margin_pct": 10.627,
-        "pe": 25.78899,
+        "pe": 26.183636,
         "market_cap_cr": 96479.3729024,
-        "trailing_eps": 65.02,
+        "trailing_eps": 64.04,
         "loss_making": false
       },
       "events": {
@@ -831,9 +832,9 @@
         "revenue_growth_pct": 27.800000000000004,
         "eps_growth_pct": 65.7,
         "profit_margin_pct": 26.046000000000003,
-        "pe": 83.64837,
+        "pe": 83.82273,
         "market_cap_cr": 245531.8822912,
-        "trailing_eps": 110.57,
+        "trailing_eps": 110.34,
         "loss_making": false
       },
       "events": {
@@ -1105,9 +1106,9 @@
         "revenue_growth_pct": 4.8,
         "eps_growth_pct": -69.8,
         "profit_margin_pct": 6.292000000000001,
-        "pe": 165.63637,
+        "pe": 164.78036,
         "market_cap_cr": 30495.3294848,
-        "trailing_eps": 7.7,
+        "trailing_eps": 7.74,
         "loss_making": false
       },
       "events": {
@@ -1129,7 +1130,7 @@
       "risks": [
         "Still below the 60-day closing high — major resistance overhead.",
         "Relative strength percentile 45 < 65 — lagging the market.",
-        "Rich valuation: P/E 166 > 60 — less margin for error on bad news."
+        "Rich valuation: P/E 165 > 60 — less margin for error on bad news."
       ],
       "rejected_reason": "relative strength 45 < 65"
     },
@@ -1247,9 +1248,9 @@
         "revenue_growth_pct": 22.0,
         "eps_growth_pct": -35.9,
         "profit_margin_pct": 15.784,
-        "pe": 25.54515,
+        "pe": 25.567951,
         "market_cap_cr": 114284.0098816,
-        "trailing_eps": 44.85,
+        "trailing_eps": 44.81,
         "loss_making": false
       },
       "events": {
