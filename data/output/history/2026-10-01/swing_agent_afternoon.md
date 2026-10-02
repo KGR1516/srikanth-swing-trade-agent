@@ -1,8 +1,8 @@
 # Swing Trade Agent — setups for the session after 2026-10-01
 
-_Generated 2026-10-01 21:17 IST · Universe: Nifty 500 (495 stocks) · Capital ₹500,000_
+_Generated 2026-10-02 20:37 IST · Universe: Nifty 500 (495 stocks) · Capital ₹500,000_
 
-**Afternoon run 21:16 IST — PROVISIONAL: today's candle is not final until 15:30**
+**Afternoon run 20:37 IST — PROVISIONAL: today's candle is not final until 15:30**
 
 ## Market regime: 🔴 BEARISH (risk × 0)
 
@@ -73,6 +73,6 @@ _No setups passed every gate today. Cash is a position._
 - VEDPOWER: insufficient_history:77<220
 
 ---
-Sources: Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar), prefetched history + live refresh of 486 liquid stocks at 21:17:05 IST, NSE bhavcopy 2026-10-01 (close cross-check), 7 clearly illiquid stocks skipped before indicators, pandas-ta-classic indicator confluence
+Sources: Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar), prefetched history + live refresh of 486 liquid stocks at 20:37:45 IST, NSE bhavcopy 2026-10-01 (close cross-check), 7 clearly illiquid stocks skipped before indicators, pandas-ta-classic indicator confluence
 
 > Research output only — not investment advice and not an order. Verify prices, results dates and liquidity before trading; size positions to your own risk tolerance.
