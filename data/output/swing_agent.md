@@ -1,8 +1,8 @@
 # Swing Trade Agent — setups for the session after 2026-10-01
 
-_Generated 2026-10-01 21:17 IST · Universe: Nifty 500 (495 stocks) · Capital ₹500,000_
+_Generated 2026-10-02 16:15 IST · Universe: Nifty 500 (495 stocks) · Capital ₹500,000_
 
-**Afternoon run 21:16 IST — PROVISIONAL: today's candle is not final until 15:30**
+**Morning run 16:14 IST — setups from the 2026-10-01 close, with live status today**
 
 ## Market regime: 🔴 BEARISH (risk × 0)
 
@@ -20,20 +20,20 @@ _No setups passed every gate today. Cash is a position._
 
 | Symbol | Action | Setup | Score | Why not a setup |
 |---|---|---|---:|---|
-| LALPATHLAB | WATCH | Pre-Breakout | 92 | risk: market regime: no new longs |
-| CASTROLIND | WATCH | Pre-Breakout | 91 | risk: market regime: no new longs |
-| WELSPUNLIV | WATCH | Breakout | 89 | breakout Extended (RSI ≥ 75 or > 5% above level) — wait for a pullback |
-| GRAPHITE | WATCH | Pullback | 86 | risk: market regime: no new longs |
 | COFORGE | WATCH | Pullback | 86 | risk: market regime: no new longs |
-| LGEINDIA | WATCH | Pre-Breakout | 85 | risk: market regime: no new longs |
-| JYOTICNC | WATCH | Pullback | 84 | risk: market regime: no new longs |
+| WELSPUNLIV | WATCH | Breakout | 85 | breakout Extended (RSI ≥ 75 or > 5% above level) — wait for a pullback |
+| LALPATHLAB | WATCH | Pre-Breakout | 84 | risk: market regime: no new longs |
 | CUB | WATCH | Pullback | 84 | risk: market regime: no new longs |
 | ENRIN | WATCH | Pre-Breakout | 84 | risk: market regime: no new longs |
 | AUROPHARMA | WATCH | Pullback | 84 | risk: market regime: no new longs |
 | BHEL | WATCH | Pullback | 83 | risk: market regime: no new longs |
-| DIVISLAB | WATCH | Pullback | 82 | risk: market regime: no new longs |
+| CASTROLIND | WATCH | Pre-Breakout | 82 | risk: market regime: no new longs |
+| JYOTICNC | WATCH | Pullback | 80 | risk: market regime: no new longs |
+| RBLBANK | WATCH | Pullback | 78 | risk: market regime: no new longs |
 | SAILIFE | WATCH | Pullback | 78 | risk: market regime: no new longs |
-| RBLBANK | WATCH | Pullback | 76 | risk: market regime: no new longs |
+| GRAPHITE | WATCH | Pullback | 78 | risk: market regime: no new longs |
+| LGEINDIA | WATCH | Pre-Breakout | 77 | risk: market regime: no new longs |
+| DIVISLAB | WATCH | Pullback | 76 | risk: market regime: no new longs |
 | PETRONET | WATCH | Pre-Breakout | 74 | risk: market regime: no new longs |
 | SCHNEIDER | WATCH | Breakout | 72 | relative strength 45 < 65 |
 | MOTILALOFS | WATCH | Pullback | 68 | risk: market regime: no new longs |
@@ -73,6 +73,6 @@ _No setups passed every gate today. Cash is a position._
 - VEDPOWER: insufficient_history:77<220
 
 ---
-Sources: Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar), prefetched history + live refresh of 486 liquid stocks at 21:17:05 IST, NSE bhavcopy 2026-10-01 (close cross-check), 7 clearly illiquid stocks skipped before indicators, pandas-ta-classic indicator confluence
+Sources: Yahoo Finance (adjusted daily OHLCV, fundamentals, calendar), NSE bhavcopy 2026-10-01 (close cross-check), 7 clearly illiquid stocks skipped before indicators, pandas-ta-classic indicator confluence
 
 > Research output only — not investment advice and not an order. Verify prices, results dates and liquidity before trading; size positions to your own risk tolerance.
